@@ -1,18 +1,40 @@
-/**
- * Welcome to Cloudflare Workers! This is your first worker.
- *
- * - Run `npm run dev` in your terminal to start a development server
- * - Open a browser tab at http://localhost:8787/ to see your worker in action
- * - Run `npm run deploy` to publish your worker
- *
- * Bind resources to your worker in `wrangler.toml`. After adding bindings, a type definition for the
- * `Env` object can be regenerated with `npm run cf-typegen`.
- *
- * Learn more at https://developers.cloudflare.com/workers/
- */
+export interface Env {
+	AI: Ai;
+}
 
 export default {
-	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-		return new Response('Hello World!');
+	async fetch(request, env): Promise<Response> {
+		if (request.method === 'OPTIONS') {
+			return new Response(null, {
+				status: 204,
+				headers: {
+					'Access-Control-Allow-Origin': '*',
+					'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+					'Access-Control-Allow-Headers': 'Content-Type',
+				},
+			});
+		}
+
+		try {
+			const { prompt } = (await request.json()) as { prompt: string };
+
+			if (!prompt) {
+				return new Response('Prompt is required', { status: 400 });
+			}
+
+			const inputs = { prompt };
+			const aiResponse = await env.AI.run('@cf/stabilityai/stable-diffusion-xl-base-1.0', inputs);
+
+			const headers = new Headers();
+			headers.set('Content-Type', 'image/png');
+			headers.set('Access-Control-Allow-Origin', '*');
+
+			return new Response(aiResponse, {
+				status: 200,
+				headers: headers,
+			});
+		} catch (error) {
+			return new Response('Invalid request', { status: 400 });
+		}
 	},
-};
+} satisfies ExportedHandler<Env>;
